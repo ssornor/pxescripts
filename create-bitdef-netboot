@@ -1,0 +1,117 @@
+#!/bin/bash
+
+echo "Args: $@"
+
+usage() {
+  cat<<EOF
+-h Help:
+  -i [path] = ISO to extract (must provide, or it will need to be downloaded)
+  -d = download current ISO
+  -p [path] = download path
+  -e [path] = extract path
+  -n [path] = NFS path
+  -s = skip NFS
+  -u [path] = ISO url
+  -c clean up downloaded ISO (TODO: not implemented)
+EOF
+}
+
+while getopts "h:i:d:p:e:s:n:u:" OPT ; do
+  echo "OPT = $OPT , OPTARG = ${OPTARG}"
+  echo "$@"
+  case $OPT in
+    h)
+      usage
+      exit 1
+      ;;
+    i)
+      if [ -z "$OPTARG" ]; then
+        echo "ERROR: -i Must provide ISO path for"
+        exit 1
+      fi
+      OPT_ISO_FILE="$OPTARG"
+      OPT_DOWNLOAD_ISO="N"
+      ;;
+    d)
+      OPT_DOWNLOAD_ISO="Y"
+      ;;
+    p)
+      OPT_DOWNLOAD_PATH="$OPTARG"
+      ;;
+    e)
+      OPT_EXTRACT_PATH="$OPTARG"
+      ;;
+    s)
+      ;;
+    n)
+      OPT_NFS_PATH="$OPTARG"
+      ;;
+    u)
+      OPT_ISO_URL="$OPTARG"
+      ;;
+    c)
+      echo "TODO: Not yet implemented"
+      ;;
+    :)
+      echo "No options passed, using defaults"
+      ;;
+  esac
+done
+
+#set up paths/variables
+
+DOWNLOAD_PATH="${OPT_DOWNLOAD_PATH:-./}"
+EXTRACT_PATH="${OPT_EXTRAXT_PATH:-./}"
+ISO_NAME="bitdefender-rescue-cd.iso"
+
+FINAL_BOOT_PATH="${EXTRACT_PATH}/bitdefender/"
+FINAL_NFS_PATH="${OPT_NFS_PATH:-${FINAL_BOOT_PATH}/nfs/}"
+ISO_FILE="${OPT_ISO_FILE:-${DOWNLOAD}/${ISO_NAME}}"
+
+if [ -z "${ISO_URL}" ]; then
+  ISO_URL="http://download.bitdefender.com/rescue_cd/${ISO_NAME}"
+fi
+
+DOWNLOAD_ISO="${OPT_DOWNLOAD_ISO:-N}"
+if [ ! -z "${OPT_ISO_FILE}" ]; then
+  DOWNLOAD_ISO="N"
+fi
+
+#files to extract
+KERNEL_ISO_PATH="boot/"
+KERNEL="kernel.i386-pc"
+INITRD_ISO_PATH="boot/"
+INITRD="initfs.i386-pc"
+SQUASHFS_ISO_PATH="rescue/"
+SQUASHFS="livecd.squashfs"
+
+# display variables to use:
+
+if [ -z "${OPT_DOWNLOAD_ISO}" ]; then
+  echo "Downloading ISO ${ISO_NAME} from ${ISO_URL} to ${DOWNLOAD_PATH}"
+  wget ${ISO_URL} ${DOWNLOAD_PATH}/${ISO_NAME}
+fi
+echo "Extracting from ${ISO_FILE} to ${EXTRACT_PATH}"
+7z e -o${EXTRACT_PATH} ${ISO_FILE} ${KERNEL_ISO_PATH}${KERNEL}
+7z e -o${EXTRACT_PATH} ${ISO_FILE} ${KERNEL_ISO_PATH}${INITRD}
+7z e -o${EXTRACT_PATH} ${ISO_FILE} ${SQUASHFS_ISO_PATH}${SQUASHFS}
+
+mkdir -p ${FINAL_BOOT_PATH}
+mv ${EXTRACT_PATH}${KERNEL} ${FINAL_BOOT_PATH}${KERNEL}
+mv ${EXTRACT_PATH}${INITRD} ${FINAL_BOOT_PATH}${INITRD}
+
+# requires sudo
+mkdir -p ${FINAL_NFS_PATH}
+sudo unsquashfs -f -d ${FINAL_NFS_PATH} ${EXTRACT_PATH}${SQUASHFS} 
+#delete squashfs file
+rm ${EXTRACT_PATH}${SQUASHFS}
+
+#everything should be done - leave final instructions
+echo "Set up NFS export ${FINAL_NFS_PATH} (rw,sync,fsid=0,crossmnt,no_root-squash,insecure,nohid,no_subtree_check)"
+echo "PXE boot menu add:"
+echo " label bitdefender"
+echo "   kernel ${FINAL_BOOT_PATH}${KERNEL}"
+echo "   initrd ${FINAL_BOOT_PATH}${INITRD}"
+echo "   append boot=nfs root=/dev/nfs netboot=nfs nfsroot=[MY_IP]:/${FINAL_NFS_PATH},rw,nolock,soft,intr ip=dhcp"
+
+exit 0

@@ -1,0 +1,8 @@
+TODO:
+move pxe files here, then link (including pxe/default)
+create .gitignore, put under version control
+create bitdefender script (so new CD can be downloaded, only necessary kernel and initrd image file are extracted, and new squashfs is setup
+modify setp (only to check for oa+rx? - need +x for tftp)
+create full diskless workstation
+create virus scan automated system (virus scan, registry editor, scrit to clean up temp files, etc)
+
